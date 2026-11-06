@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Cycle & Pantry</title>
+  <link rel="manifest" href="./manifest.json">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f7f7f5;
+      --text: #37352f;
+      --sub: #787774;
+      --border: #e9e9e7;
+      --primary: #2383e2;
+      --danger: #eb5757;
+      --fav: #ffb100;
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding-bottom: 80px; -webkit-font-smoothing: antialiased; }
+    
+    /* 核心布局 */
+    .view { display: none; padding: 20px; animation: fadeIn 0.2s ease; }
+    .view.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    
+    /* Notion 卡片风格 */
+    .card { background: var(--surface); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; border: 1px solid var(--border); }
+    .clickable { cursor: pointer; transition: transform 0.1s; }
+    .clickable:active { transform: scale(0.98); }
+    
+    /* 周期主卡片 */
+    .cycle-card { text-align: center; background: linear-gradient(135deg, #fffbf7, #f7f7f5); border: 1px solid #ede6dc; }
+    .cycle-day { font-size: 2.8rem; font-weight: 700; margin: 8px 0; color: var(--text); }
+    .cycle-phase { font-size: 1.1rem; font-weight: 600; color: #e16b5a; }
+    
+    /* 标签系统 */
+    .category-block { margin-bottom: 20px; }
+    .category-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .category-title { font-size: 0.9rem; font-weight: 600; color: var(--sub); }
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .tag { padding: 6px 14px; border-radius: 20px; background: var(--surface); border: 1px solid var(--border); font-size: 0.85rem; transition: all 0.2s; -webkit-tap-highlight-color: transparent; }
+    .tag.selected { background: var(--text); color: #fff; border-color: var(--text); }
+    .tag.phase-tag.selected { background: #e16b5a; color: #fff; border-color: #e16b5a; }
+    .btn-text { color: var(--primary); font-size: 0.85rem; cursor: pointer; }
+    
+    /* Pinterest 菜谱列表 */
+    .recipe-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .recipe-card { border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; display: flex; flex-direction: column; background: #fff; position: relative; }
+    .recipe-img { width: 100%; height: 120px; object-fit: cover; background: var(--surface); }
+    .recipe-info { padding: 10px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+    .recipe-title { font-size: 0.95rem; font-weight: 600; margin-bottom: 4px; }
+    .recipe-meta { font-size: 0.8rem; color: var(--sub); }
+    .recipe-badge { position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.9); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    
+    /* 全屏弹出层 (详情页/表单) */
+    .full-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; background: var(--bg); z-index: 200; overflow-y: auto; display: none; padding: 20px 20px 40px 20px; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: sticky; top: 0; background: #fff; padding: 10px 0; z-index: 10; border-bottom: 1px solid var(--border); }
+    .back-btn { font-size: 1.5rem; cursor: pointer; padding-right: 20px; }
+    
+    /* 底部导航 */
+    .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; height: 65px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-top: 1px solid var(--border); display: flex; justify-content: space-around; align-items: center; z-index: 100; }
+    .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--sub); text-decoration: none; font-size: 0.75rem; width: 25%; -webkit-tap-highlight-color: transparent; }
+    .nav-item.active { color: var(--text); font-weight: 600; }
+    .nav-icon { font-size: 1.4rem; margin-bottom: 2px; }
+
+    /* 表单元素 */
+    input, textarea, select { width: 100%; padding: 12px; margin-bottom: 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); font-size: 1rem; color: var(--text); }
+    textarea { resize: none; }
+    label { font-size: 0.85rem; font-weight: 600; color: var(--sub); display: block; margin-bottom: 6px; }
+    button { background: var(--text); color: #fff; border: none; padding: 12px; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; margin-bottom: 10px; }
+    button.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    button.danger { background: var(--danger); color: white; }
+    
+    .floating-btn { position: fixed; bottom: 85px; right: 20px; width: 50px; height: 50px; border-radius: 25px; background: var(--text); color: white; display: flex; justify-content: center; align-items: center; font-size: 28px; box-shadow: 0 4px 12px rgba(0,0,0,0.12); z-index: 99; }
+    .section-title { font-size: 1.1rem; margin: 20px 0 10px 0; border-left: 3px solid var(--text); padding-left: 8px; }
+    .detail-text { font-size: 0.95rem; line-height: 1.6; white-space: pre-wrap; color: var(--text); margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+
+  <!-- ================= 视图：首页 ================= -->
+  <div id="view-home" class="view active">
+    <div class="card cycle-card clickable" onclick="openPhaseDetailModal()">
+      <div style="font-size:0.85rem; color:var(--sub);">当前周期详情 (点击可自定义编辑)</div>
+      <div class="cycle-day">第 <span id="ui-day">1</span> 天</div>
+      <div class="cycle-phase" id="ui-phase">阶段计算中...</div>
+      <div id="ui-phase-brief" style="text-align:left; border-top:1px dashed var(--border); margin-top:12px; padding-top:8px;"></div>
+    </div>
+    
+    <h3 class="section-title">当前阶段推荐食谱</h3>
+    <div class="recipe-list" id="home-recommendations"></div>
+
+    <h3 class="section-title" style="margin-top: 25px;">💡 灵感闪现 (随机推荐)</h3>
+    <div class="recipe-list" id="home-random-recommendations"></div>
+  </div>
+
+  <!-- ================= 视图：多食材组合搜索 ================= -->
+  <div id="view-pantry" class="view">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+      <h2>食材消耗驱动</h2>
+      <span class="btn-text" onclick="addNewCategory()">+ 新增分类</span>
+    </div>
+    <div id="pantry-tags-container"></div>
+    <button onclick="searchRecipes()" style="position: sticky; bottom: 75px; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">开始匹配菜谱</button>
+    <div id="search-results-container" style="display:none;">
+      <h3 class="section-title">匹配结果 (按匹配度排序)</h3>
+      <div class="recipe-list" id="search-results"></div>
+    </div>
+  </div>
+
+  <!-- ================= 视图：我的菜谱 ================= -->
+  <div id="view-recipes" class="view">
+    <div style="display:flex; gap:15px; margin-bottom:15px; align-items:center;">
+      <h2 id="recipe-list-title" style="flex:1;">全部菜谱</h2>
+      <span class="btn-text" id="toggle-fav-btn" onclick="toggleRecipeFilter()">只看收藏</span>
+    </div>
+    <div class="recipe-list" id="all-recipes-list"></div>
+    <div class="floating-btn clickable" onclick="openRecipeForm()">+</div>
+  </div>
+
+  <!-- ================= 视图：设置与周期管理 ================= -->
+  <div id="view-settings" class="view">
+    <h2>周期自定义设置</h2>
+    <div class="card" style="margin-top:15px;">
+      <label>最近一次月经开始日期</label>
+      <input type="date" id="set-start-date">
+      
+      <h3 style="font-size:0.95rem; margin:10px 0;">各阶段天数自定义（之和即为总周期）</h3>
+      <label>阶段1：月经期＋卵泡早期 (天)</label>
+      <input type="number" id="len-p1" value="7">
+      <label>阶段2：排卵期 (天)</label>
+      <input type="number" id="len-p2" value="5">
+      <label>阶段3：排卵后低激素期 (天)</label>
+      <input type="number" id="len-p3" value="5">
+      <label>阶段4：黄体期 (天)</label>
+      <input type="number" id="len-p4" value="11">
+      
+      <p style="font-size:0.85rem; color:var(--sub); margin-bottom:12px;">自动计算总周期：<span id="ui-total-cycle">28</span> 天</p>
+      <button onclick="saveCycleSettings()">保存设置</button>
+    </div>
+
+    <!-- 数据安全保险箱 -->
+    <h3 class="section-title">数据安全保险箱 (防丢备份机制)</h3>
+    <div class="card">
+      <p style="font-size:0.85rem; color:var(--sub); margin-bottom:12px;">建议定期导出备份文件并存放在手机“文件”应用中或发送至微信传输助手。</p>
+      <button class="secondary" onclick="exportDataToLocalFile()">📥 导出全部数据为本地文件</button>
+      
+      <input type="file" id="import-file-input" accept=".json" style="display:none;" onchange="importDataFromLocalFile(this)">
+      <button class="secondary" style="margin-top:5px;" onclick="document.getElementById('import-file-input').click()">📤 从备份文件恢复全部数据</button>
+    </div>
+  </div>
+
+  <!-- ================= 弹窗：生理阶段详情页 ================= -->
+  <div id="modal-phase-detail" class="full-modal">
+    <div class="modal-header">
+      <span class="back-btn" onclick="closePhaseDetailModal()">←</span>
+      <h3 id="phase-detail-title">阶段详情</h3>
+      <span class="btn-text" onclick="savePhaseDetailEdits()">保存修改</span>
+    </div>
+    <label>阶段介绍</label>
+    <textarea id="edit-phase-intro" rows="3"></textarea>
+    <label>常见身体表现</label>
+    <textarea id="edit-phase-symptoms" rows="3"></textarea>
+    <label>饮食建议</label>
+    <textarea id="edit-phase-diet" rows="3"></textarea>
+    <label>用户自定义笔记</label>
+    <textarea id="edit-phase-notes" rows="5" placeholder="在这里写下你的专属记录..."></textarea>
+  </div>
+
+  <!-- ================= 弹窗：菜谱详情页 ================= -->
+  <div id="modal-recipe-detail" class="full-modal">
+    <div class="modal-header">
+      <span class="back-btn" onclick="closeRecipeDetail()">←</span>
+      <h3 id="detail-recipe-title">菜谱详情</h3>
+      <span class="btn-text" id="detail-fav-action" style="color:var(--fav);">收藏</span>
+    </div>
+    <img id="detail-recipe-img" style="width:100%; height:200px; object-fit:cover; border-radius:var(--radius); margin-bottom:15px; display:none;">
+    <div style="display:flex; gap:10px; margin-bottom:15px;">
+      <button class="secondary" style="margin:0;" id="detail-edit-btn">编辑菜谱</button>
+      <button class="danger" style="margin:0;" id="detail-del-btn">删除</button>
+    </div>
+    <label>包含食材</label>
+    <div class="tags" id="detail-recipe-ingredients" style="margin-bottom:15px;"></div>
+    <label>适合生理阶段</label>
+    <div class="tags" id="detail-recipe-phases" style="margin-bottom:15px;"></div>
+    <label>制作步骤</label>
+    <div class="detail-text" id="detail-recipe-steps"></div>
+    <label>备注</label>
+    <div class="detail-text" id="detail-recipe-notes"></div>
+  </div>
+
+  <!-- ================= 弹窗：新增/编辑菜谱表单 ================= -->
+  <div id="modal-recipe-form" class="full-modal">
+    <div class="modal-header">
+      <span class="back-btn" onclick="closeRecipeForm()">←</span>
+      <h3 id="recipe-form-title">新增食谱</h3>
+      <span></span>
+    </div>
+    <input type="text" id="form-recipe-name" placeholder="食谱名称 (必填)">
+    <label>封面图片</label>
+    <input type="file" id="form-recipe-img" accept="image/*">
+    <img id="form-recipe-preview" style="width:100%; height:150px; object-fit:cover; border-radius:8px; display:none; margin-bottom:12px;">
+    
+    <label>选择关联食材 (可多选)</label>
+    <div id="form-recipe-ingredients-pool" style="margin-bottom:16px;"></div>
+    
+    <label>适合生理阶段 (可多选)</label>
+    <div class="tags" style="margin-bottom:16px;">
+      <div class="tag phase-tag" data-val="1">阶段1</div>
+      <div class="tag phase-tag" data-val="2">阶段2</div>
+      <div class="tag phase-tag" data-val="3">阶段3</div>
+      <div class="tag phase-tag" data-val="4">阶段4</div>
+    </div>
+    
+    <label>制作步骤</label>
+    <textarea id="form-recipe-steps" rows="12" placeholder="第一步，第二步..."></textarea>
+    
+    <label>备注</label>
+    <textarea id="form-recipe-notes" rows="5" placeholder="卡路里、避坑指南等..."></textarea>
+    
+    <button onclick="submitRecipeForm()">保存菜谱</button>
+  </div>
+
+  <!-- ================= 底部导航 ================= -->
+  <div class="bottom-nav">
+    <a href="#" class="nav-item active" onclick="switchTab('home', this)"><span class="nav-icon">✨</span><span>主页</span></a>
+    <a href="#" class="nav-item" onclick="switchTab('pantry', this)"><span class="nav-icon">🥑</span><span>清冰箱</span></a>
+    <a href="#" class="nav-item" onclick="switchTab('recipes', this)"><span class="nav-icon">📖</span><span>菜谱</span></a>
+    <a href="#" class="nav-item" onclick="switchTab('settings', this)"><span class="nav-icon">⚙️</span><span>设置</span></a>
+  </div>
+
+  <script>
+    const DB_NAME = 'PantryCycleUltimateDB';
+    const DB_VERSION = 1;
+    let db;
+
+    const defaultCategories = [
+      { id: "cat_1", name: "面包类", tags: ["吐司", "贝果", "可颂"] },
+      { id: "cat_2", name: "水果类", tags: ["猕猴桃", "草莓", "蓝莓"] },
+      { id: "cat_3", name: "蔬菜类", tags: ["菠菜", "黄瓜", "番茄"] },
+      { id: "cat_4", name: "蛋白质类", tags: ["鸡蛋", "鸡胸肉", "虾仁"] },
+      { id: "cat_5", name: "乳制品", tags: ["牛奶", "酸奶", "黄油"] }
+    ];
+
+    const defaultPhaseDetails = {
+      1: { intro: "月经期＋卵泡早期。身体排出经血，激素处于低谷，随后雌激素缓慢爬升。", symptoms: "可能痛经、手脚冰凉、精力较低。", diet: "适合温暖、补铁、容易消化的食物。减少生冷。", notes: "" },
+      2: { intro: "排卵期。雌激素分泌达到顶峰，卵巢释放卵子。", symptoms: "精力最充沛，皮肤状态好，食欲相对平稳。", diet: "适合高蛋白、抗氧化、清淡控油的轻食。", notes: "" },
+      3: { intro: "排卵后低激素期。黄体形成初期，激素出现短暂的断崖式轻微下跌。", symptoms: "精力可能稍有回落，偶尔有疲惫感。", diet: "适合平稳血糖的复合碳水，多吃膳食纤维。", notes: "" },
+      4: { intro: "黄体期。孕激素占据主导，子宫内膜增厚，为月经做准备。", symptoms: "容易水肿、皮肤冒痘、渴望甜食、情绪波动。", diet: "适合低钠防开水肿、富含镁（如黑巧、香蕉）和维生素B的食物。", notes: "" }
+    };
+
+    let appState = {
+      settings: { startDate: new Date().toISOString().split('T')[0], p1: 7, p2: 5, p3: 5, p4: 11 },
+      phaseDetails: defaultPhaseDetails,
+      selectedIngredientsForSearch: new Set(),
+      formIngredients: new Set(),
+      formPhases: new Set(),
+      formImageBase64: '',
+      editingRecipeId: null,
+      onlyShowFavorites: false
+    };
+
+    function initDB() {
+      return new Promise((resolve) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = e => {
+          const d = e.target.result;
+          d.createObjectStore('recipes', { keyPath: 'id' });
+          d.createObjectStore('categories', { keyPath: 'id' });
+          d.createObjectStore('settings', { keyPath: 'id' });
+        };
+        req.onsuccess = async e => {
+          db = e.target.result;
+          await seedDefaultData();
+          resolve();
+        };
+      });
+    }
+
+    async function seedDefaultData() {
+      const cats = await dbGetAll('categories');
+      if (cats.length === 0) {
+        for (let c of defaultCategories) await dbPut('categories', c);
+      }
+      const set = await dbGet('settings', 'app_config');
+      if (!set) {
+        await dbPut('settings', { id: 'app_config', settings: appState.settings, phaseDetails: defaultPhaseDetails });
+      } else {
+        appState.settings = set.settings;
+        appState.phaseDetails = set.phaseDetails || defaultPhaseDetails;
+      }
+    }
+
+    function dbPut(store, data) {
+      return new Promise(r => {
+        const tx = db.transaction(store, 'readwrite');
+        tx.objectStore(store).put(data);
+        tx.oncomplete = () => r();
+      });
+    }
+    function dbGetAll(store) {
+      return new Promise(r => {
+        const tx = db.transaction(store, 'readonly');
+        const req = tx.objectStore(store).getAll();
+        req.onsuccess = () => r(req.result);
+      });
+    }
+    function dbGet(store, id) {
+      return new Promise(r => {
+        const tx = db.transaction(store, 'readonly');
+        const req = tx.objectStore(store).get(id);
+        req.onsuccess = () => r(req.result);
+      });
+    }
+    function dbDelete(store, id) {
+      return new Promise(r => {
+        const tx = db.transaction(store, 'readwrite');
+        tx.objectStore(store).delete(id);
+        tx.oncomplete = () => r();
+      });
+    }
+
+    function calculateCurrentCycle() {
+      const start = new Date(appState.settings.startDate).getTime();
+      const now = new Date().setHours(0,0,0,0);
+      const diffDays = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+      
+      const totalCycle = Number(appState.settings.p1) + Number(appState.settings.p2) + Number(appState.settings.p3) + Number(appState.settings.p4);
+      let currentDay = (diffDays % totalCycle) + 1;
+      if (currentDay <= 0) currentDay += totalCycle;
+
+      let phaseNum = 1;
+      const t1 = Number(appState.settings.p1);
+      const t2 = t1 + Number(appState.settings.p2);
+      const t3 = t2 + Number(appState.settings.p3);
+
+      if (currentDay <= t1) phaseNum = 1;
+      else if (currentDay <= t2) phaseNum = 2;
+      else if (currentDay <= t3) phaseNum = 3;
+      else phaseNum = 4;
+
+      return { day: currentDay, phaseNum, totalCycle };
+    }
+
+    async function updateHomeUI() {
+      const { day, phaseNum, totalCycle } = calculateCurrentCycle();
+      document.getElementById('ui-day').innerText = day;
+      
+      const phaseNames = { 1: "阶段1: 月经期＋卵泡早期", 2: "阶段2: 排卵期", 3: "阶段3: 排卵后低激素期", 4: "阶段4: 黄体期" };
+      document.getElementById('ui-phase').innerText = phaseNames[phaseNum];
+      
+      const detail = appState.phaseDetails[phaseNum];
+      document.getElementById('ui-phase-brief').innerHTML = `
+        <div style="font-size:0.85rem; line-height:1.5; color:var(--text);">
+          <p style="margin-bottom:4px;"><b>💡 阶段简介：</b>${detail.intro}</p>
+          <p style="margin-bottom:4px;"><b>🧘 身体表现：</b>${detail.symptoms}</p>
+          <p style="margin-bottom:4px;"><b>🥑 饮食建议：</b>${detail.diet}</p>
+          ${detail.notes ? `<p style="color:var(--primary); margin-top:6px;"><b>📝 个人笔记：</b>${detail.notes}</p>` : ''}
+        </div>
+      `;
+
+      const recipes = await dbGetAll('recipes');
+      const recs = recipes.filter(r => r.phases && r.phases.includes(phaseNum.toString()));
+      renderRecipeGrid(recs, 'home-recommendations');
+      renderRandomRecommendations(recipes);
+    }
+
+    function renderRandomRecommendations(recipes) {
+      const container = document.getElementById('home-random-recommendations');
+      if (recipes.length === 0) {
+        container.innerHTML = '<p style="color:var(--sub); font-size:0.85rem; padding:10px;">还没有录入任何菜谱，快去录入吧！</p>';
+        return;
+      }
+      const shuffled = [...recipes].sort(() => 0.5 - Math.random());
+      renderRecipeGrid(shuffled.slice(0, 4), 'home-random-recommendations');
+    }
+
+    function initSettingsView() {
+      document.getElementById('set-start-date').value = appState.settings.startDate;
+      document.getElementById('len-p1').value = appState.settings.p1;
+      document.getElementById('len-p2').value = appState.settings.p2;
+      document.getElementById('len-p3').value = appState.settings.p3;
+      document.getElementById('len-p4').value = appState.settings.p4;
+      updateTotalCycleText();
+    }
+
+    function updateTotalCycleText() {
+      const sum = Number(document.getElementById('len-p1').value) +
+                  Number(document.getElementById('len-p2').value) +
+                  Number(document.getElementById('len-p3').value) +
+                  Number(document.getElementById('len-p4').value);
+      document.getElementById('ui-total-cycle').innerText = sum;
+    }
+    document.querySelectorAll('#view-settings input[type="number"]').forEach(el => el.addEventListener('input', updateTotalCycleText));
+
+    async function saveCycleSettings() {
+      appState.settings.startDate = document.getElementById('set-start-date').value;
+      appState.settings.p1 = parseInt(document.getElementById('len-p1').value) || 7;
+      appState.settings.p2 = parseInt(document.getElementById('len-p2').value) || 5;
+      appState.settings.p3 = parseInt(document.getElementById('len-p3').value) || 5;
+      appState.settings.p4 = parseInt(document.getElementById('len-p4').value) || 11;
+      
+      await dbPut('settings', { id: 'app_config', settings: appState.settings, phaseDetails: appState.phaseDetails });
+      alert('设置已成功安全保存！');
+      updateHomeUI();
+    }
+
+    function openPhaseDetailModal() {
+      const { phaseNum } = calculateCurrentCycle();
+      const detail = appState.phaseDetails[phaseNum];
+      
+      document.getElementById('phase-detail-title').innerText = `阶段 ${phaseNum} 专属自定义及建议`;
+      document.getElementById('edit-phase-intro').value = detail.intro;
+      document.getElementById('edit-phase-symptoms').value = detail.symptoms;
+      document.getElementById('edit-phase-diet').value = detail.diet;
+      document.getElementById('edit-phase-notes').value = detail.notes || "";
+      
+      document.getElementById('modal-phase-detail').style.display = 'block';
+    }
+
+    function closePhaseDetailModal() { document.getElementById('modal-phase-detail').style.display = 'none'; }
+
+    async function savePhaseDetailEdits() {
+      const { phaseNum } = calculateCurrentCycle();
+      appState.phaseDetails[phaseNum] = {
+        intro: document.getElementById('edit-phase-intro').value,
+        symptoms: document.getElementById('edit-phase-symptoms').value,
+        diet: document.getElementById('edit-phase-diet').value,
+        notes: document.getElementById('edit-phase-notes').value
+      };
+      await dbPut('settings', { id: 'app_config', settings: appState.settings, phaseDetails: appState.phaseDetails });
+      alert('本阶段详情已保存修改！');
+      closePhaseDetailModal();
+      updateHomeUI();
+    }
+
+    async function exportDataToLocalFile() {
+      const recipes = await dbGetAll('recipes');
+      const categories = await dbGetAll('categories');
+      const config = await dbGet('settings', 'app_config');
+      
+      const backupObj = {
+        version: "2.2",
+        timestamp: Date.now(),
+        recipes: recipes,
+        categories: categories,
+        config: config
+      };
+      
+      const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pantry_cycle_backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      alert('备份文件已成功生成！请将其保存到手机本地。');
+    }
+
+    function importDataFromLocalFile(input) {
+      const file = input.files[0];
+      if (!file) return;
+      if (!confirm('警告：导入备份文件将会【完全覆盖】当前手机里的所有菜谱和设置。确定要执行恢复吗？')) { input.value = ''; return; }
+      
+      const reader = new FileReader();
+      reader.onload = async e => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (!data.recipes || !data.categories) { alert('导入失败：该文件似乎不是有效的食谱备份文件。'); return; }
+          for (let r of data.recipes) await dbPut('recipes', r);
+          for (let c of data.categories) await dbPut('categories', c);
+          if (data.config) {
+            await dbPut('settings', data.config);
+            appState.settings = data.config.settings;
+            appState.phaseDetails = data.config.phaseDetails || defaultPhaseDetails;
+          }
+          alert(`🎉 恭喜！数据已成功完美恢复。共导入 ${data.recipes.length} 个菜谱！`);
+          location.reload();
+        } catch (err) { alert('解析备份文件出错：' + err.message); }
+      };
+      reader.readAsText(file);
+    }
+
+    async function renderPantryTags() {
+      const container = document.getElementById('pantry-tags-container');
+      container.innerHTML = '';
+      const categories = await dbGetAll('categories');
+
+      categories.forEach(cat => {
+        const block = document.createElement('div');
+        block.className = 'category-block';
+        block.innerHTML = `
+          <div class="category-header">
+            <span class="category-title" style="font-weight:700; color:var(--text);">${cat.name}</span>
+            <div>
+              <span class="btn-text" onclick="addNewTag('${cat.id}')" style="margin-right:12px;">+ 新增标签</span>
+              <span class="btn-text" onclick="deleteCategory('${cat.id}')" style="color:var(--danger);">🗑️ 删除分类</span>
+            </div>
+          </div>
+        `;
+        const tagsDiv = document.createElement('div');
+        tagsDiv.className = 'tags';
+        
+        cat.tags.forEach(tag => {
+          const tEl = document.createElement('div');
+          tEl.className = `tag ${appState.selectedIngredientsForSearch.has(tag) ? 'selected' : ''}`;
+          tEl.style.display = 'inline-flex';
+          tEl.style.alignItems = 'center';
+          tEl.style.gap = '6px';
+          
+          tEl.innerHTML = `
+            <span>${tag}</span>
+            <span style="font-size:14px; font-weight:bold; padding:2px 4px; margin-left:2px; opacity:0.6; cursor:pointer;" onclick="deleteTag(event, '${cat.id}', '${tag}')">×</span>
+          `;
+          
+          tEl.onclick = () => {
+            if (appState.selectedIngredientsForSearch.has(tag)) {
+              appState.selectedIngredientsForSearch.delete(tag);
+              tEl.classList.remove('selected');
+            } else {
+              appState.selectedIngredientsForSearch.add(tag);
+              tEl.classList.add('selected');
+            }
+          };
+          tagsDiv.appendChild(tEl);
+        });
+        block.appendChild(tagsDiv);
+        container.appendChild(block);
+      });
+    }
+
+    async function addNewCategory() {
+      const name = prompt("请输入新食材分类名称 (例如: 调味类):");
+      if (!name) return;
+      const newCat = { id: 'cat_' + Date.now(), name: name, tags: [] };
+      await dbPut('categories', newCat);
+      renderPantryTags();
+    }
+
+    async function addNewTag(catId) {
+      const tag = prompt("请输入新食材标签名称 (例如: 沙拉酱):");
+      if (!tag) return;
+      const cat = await dbGet('categories', catId);
+      if (!cat.tags.includes(tag)) {
+        cat.tags.push(tag);
+        await dbPut('categories', cat);
+        renderPantryTags();
+      }
+    }
+
+    async function deleteTag(event, catId, tag) {
+      event.stopPropagation();
+      if (!confirm(`确定要彻底删除“${tag}”这个食材标签吗？`)) return;
+      
+      const cat = await dbGet('categories', catId);
+      if (cat) {
+        cat.tags = cat.tags.filter(t => t !== tag);
+        await dbPut('categories', cat);
+        appState.selectedIngredientsForSearch.delete(tag);
+        renderPantryTags();
+      }
+    }
+
+    async function deleteCategory(catId) {
+      const cat = await dbGet('categories', catId);
+      if (!cat) return;
+      if (!confirm(`🚨 危险操作！\n确定要删除整个“${cat.name}”分类及其包含的所有标签吗？`)) return;
+      
+      cat.tags.forEach(t => appState.selectedIngredientsForSearch.delete(t));
+      await dbDelete('categories', catId);
+      renderPantryTags();
+    }
+
+    async function searchRecipes() {
+      const selected = Array.from(appState.selectedIngredientsForSearch);
+      if (selected.length === 0) { alert('请先点选你目前拥有的食材标签！'); return; }
+
+      const recipes = await dbGetAll('recipes');
+      const results = recipes.map(r => {
+        const rIngs = r.ingredients || [];
+        if (rIngs.length === 0) return { ...r, score: 0 };
+        const matches = selected.filter(i => rIngs.includes(i)).length;
+        const score = Math.round((matches / rIngs.length) * 100);
+        return { ...r, score };
+      }).filter(r => r.score > 0).sort((a,b) => b.score - a.score);
+
+      document.getElementById('search-results-container').style.display = 'block';
+      renderRecipeGrid(results, 'search-results', true);
+    }
+
+    function renderRecipeGrid(recipes, containerId, showMatch = false) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      if (recipes.length === 0) {
+        container.innerHTML = '<p style="color:var(--sub); font-size:0.85rem; padding:10px;">暂无匹配菜谱</p>';
+        return;
+      }
+      recipes.forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'recipe-card clickable';
+        card.onclick = () => openRecipeDetail(r.id);
+        
+        const dummyImg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMTAgMTAwIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjdmN2Y1Ii8+PC9zdmc+';
+        const img = r.image ? r.image : dummyImg;
+        const badge = showMatch ? `<div class="recipe-badge">匹配度 ${r.score}%</div>` : '';
+        
+        card.innerHTML = `
+          <img src="${img}" class="recipe-img" loading="lazy">
+          ${badge}
+          <div class="recipe-info">
+            <div class="recipe-title">${r.name}</div>
+            <div class="recipe-meta">${r.isFavorite ? '⭐️ 已收藏' : ''}</div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    async function loadAllRecipesPage() {
+      let recipes = await dbGetAll('recipes');
+      if (appState.onlyShowFavorites) { recipes = recipes.filter(r => r.isFavorite); }
+      
+      // 🔄 核心改动：倒序排列（后添加的放在最前面）
+      recipes.reverse();
+
+      renderRecipeGrid(recipes, 'all-recipes-list');
+    }
+
+    function toggleRecipeFilter() {
+      appState.onlyShowFavorites = !appState.onlyShowFavorites;
+      document.getElementById('toggle-fav-btn').innerText = appState.onlyShowFavorites ? "查看全部" : "只看收藏";
+      document.getElementById('recipe-list-title').innerText = appState.onlyShowFavorites ? "我的收藏" : "全部菜谱";
+      loadAllRecipesPage();
+    }
+
+    async function openRecipeDetail(id) {
+      const r = await dbGet('recipes', id);
+      if (!r) return;
+
+      document.getElementById('detail-recipe-title').innerText = r.name;
+      const img = document.getElementById('detail-recipe-img');
+      if (r.image) { img.src = r.image; img.style.display = 'block'; } else { img.style.display = 'none'; }
+      
+      const ingContainer = document.getElementById('detail-recipe-ingredients');
+      ingContainer.innerHTML = r.ingredients.map(i => `<span class="tag">${i}</span>`).join('') || '无';
+      const phaseContainer = document.getElementById('detail-recipe-phases');
+      phaseContainer.innerHTML = r.phases.map(p => `<span class="tag phase-tag">阶段${p}</span>`).join('') || '通用';
+
+      document.getElementById('detail-recipe-steps').innerText = r.steps || "未填写步骤";
+      document.getElementById('detail-recipe-notes').innerText = r.notes || "无备注";
+
+      const favBtn = document.getElementById('detail-fav-action');
+      favBtn.innerText = r.isFavorite ? "★ 取消收藏" : "☆ 收藏";
+      favBtn.onclick = async () => {
+        r.isFavorite = !r.isFavorite;
+        await dbPut('recipes', r);
+        favBtn.innerText = r.isFavorite ? "★ 取消收藏" : "☆ 收藏";
+        loadAllRecipesPage();
+      };
+
+      document.getElementById('detail-del-btn').onclick = async () => {
+        if(confirm('确定要删除这个菜谱吗？')) {
+          await dbDelete('recipes', id);
+          closeRecipeDetail();
+          loadAllRecipesPage();
+          updateHomeUI();
+        }
+      };
+
+      document.getElementById('detail-edit-btn').onclick = () => {
+        closeRecipeDetail();
+        openRecipeForm(id);
+      };
+
+      document.getElementById('modal-recipe-detail').style.display = 'block';
+    }
+    function closeRecipeDetail() { document.getElementById('modal-recipe-detail').style.display = 'none'; }
+
+    async function openRecipeForm(editId = null) {
+      appState.editingRecipeId = editId;
+      appState.formIngredients.clear();
+      appState.formPhases.clear();
+      appState.formImageBase64 = '';
+      
+      document.getElementById('form-recipe-preview').style.display = 'none';
+      document.getElementById('form-recipe-img').value = '';
+
+      const pool = document.getElementById('form-recipe-ingredients-pool');
+      pool.innerHTML = '';
+      const cats = await dbGetAll('categories');
+      cats.forEach(c => {
+        const div = document.createElement('div');
+        div.style.marginBottom = '10px';
+        div.innerHTML = `<div style="font-size:0.8rem; color:var(--sub); margin-bottom:4px;">${c.name}</div>`;
+        const tagsDiv = document.createElement('div');
+        tagsDiv.className = 'tags';
+        c.tags.forEach(t => {
+          const tEl = document.createElement('span');
+          tEl.className = 'tag';
+          tEl.innerText = t;
+          tEl.onclick = () => {
+            if(appState.formIngredients.has(t)){
+              appState.formIngredients.delete(t); tEl.classList.remove('selected');
+            } else {
+              appState.formIngredients.add(t); tEl.classList.add('selected');
+            }
+          };
+          tagsDiv.appendChild(tEl);
+        });
+        div.appendChild(tagsDiv);
+        pool.appendChild(div);
+      });
+
+      document.querySelectorAll('#modal-recipe-form .phase-tag').forEach(el => {
+        el.classList.remove('selected');
+        el.onclick = () => {
+          const v = el.getAttribute('data-val');
+          if(appState.formPhases.has(v)){
+            appState.formPhases.delete(v); el.classList.remove('selected');
+          } else {
+            appState.formPhases.add(v); el.classList.add('selected');
+          }
+        };
+      });
+
+      if (editId) {
+        document.getElementById('recipe-form-title').innerText = "编辑食谱";
+        const r = await dbGet('recipes', editId);
+        document.getElementById('form-recipe-name').value = r.name;
+        document.getElementById('form-recipe-steps').value = r.steps;
+        document.getElementById('form-recipe-notes').value = r.notes;
+        
+        if (r.image) {
+          appState.formImageBase64 = r.image;
+          const pre = document.getElementById('form-recipe-preview');
+          pre.src = r.image; pre.style.display = 'block';
+        }
+        
+        r.ingredients.forEach(i => {
+          appState.formIngredients.add(i);
+          Array.from(pool.querySelectorAll('.tag')).forEach(el => {
+            if(el.innerText === i) el.classList.add('selected');
+          });
+        });
+
+        r.phases.forEach(p => {
+          appState.formPhases.add(p);
+          document.querySelectorAll(`#modal-recipe-form .phase-tag[data-val="${p}"]`).forEach(el=>el.classList.add('selected'));
+        });
+      } else {
+        document.getElementById('recipe-form-title').innerText = "新增食谱";
+        document.getElementById('form-recipe-name').value = '';
+        document.getElementById('form-recipe-steps').value = '';
+        document.getElementById('form-recipe-notes').value = '';
+      }
+
+      document.getElementById('modal-recipe-form').style.display = 'block';
+    }
+
+    function closeRecipeForm() { document.getElementById('modal-recipe-form').style.display = 'none'; }
+
+    document.getElementById('form-recipe-img').addEventListener('change', e => {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = evt => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_W = 500; const scale = MAX_W / img.width;
+          canvas.width = MAX_W; canvas.height = img.height * scale;
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          appState.formImageBase64 = canvas.toDataURL('image/jpeg', 0.75);
+          const p = document.getElementById('form-recipe-preview');
+          p.src = appState.formImageBase64; p.style.display = 'block';
+        };
+        img.src = evt.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    async function submitRecipeForm() {
+      const name = document.getElementById('form-recipe-name').value.trim();
+      if (!name) { alert('请输入食谱名称'); return; }
+
+      const id = appState.editingRecipeId || 'recipe_' + Date.now();
+      let existing = await dbGet('recipes', id);
+      
+      const recipeData = {
+        id: id,
+        name: name,
+        image: appState.formImageBase64,
+        ingredients: Array.from(appState.formIngredients),
+        phases: Array.from(appState.formPhases),
+        steps: document.getElementById('form-recipe-steps').value,
+        notes: document.getElementById('form-recipe-notes').value,
+        isFavorite: existing ? existing.isFavorite : false
+      };
+
+      await dbPut('recipes', recipeData);
+      closeRecipeForm();
+      loadAllRecipesPage();
+      updateHomeUI();
+    }
+
+    function switchTab(viewId, element) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      
+      document.getElementById(`view-${viewId}`).classList.add('active');
+      if (element) element.classList.add('active');
+
+      if (viewId === 'pantry') renderPantryTags();
+      if (viewId === 'recipes') loadAllRecipesPage();
+      if (viewId === 'home') updateHomeUI();
+      if (viewId === 'settings') initSettingsView();
+    }
+
+    window.onload = async () => {
+      await initDB();
+      updateHomeUI();
+      if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    };
+  </script>
+</body>
+</html>
