@@ -5,7 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Cycle & Pantry</title>
   <link rel="manifest" href="./manifest.json">
-  <style>
+  <style>/* 彻底隐藏 Netlify 自动注入的右下角浮动徽章 */
+[data-netlify-deploy-badge],
+.netlify-badge,
+iframe[src*="netlify"],
+#netlify-badge {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
     :root {
       --bg: #ffffff;
       --surface: #f7f7f5;
